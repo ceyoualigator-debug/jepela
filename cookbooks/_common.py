@@ -8,15 +8,15 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "sdk", "python"))
 
-from jers import JersClient  # noqa: E402
+from jepela import JepelaClient  # noqa: E402
 
-MODEL = os.environ.get("JERS_MODEL", "jers-english")
+MODEL = os.environ.get("JEPELA_MODEL", "jepela-english")
 
 
-def client() -> JersClient:
-    if not os.environ.get("JERS_API_KEY"):
-        sys.exit("set JERS_API_KEY (your Jers key)")
-    return JersClient()
+def client() -> JepelaClient:
+    if not os.environ.get("JEPELA_API_KEY"):
+        sys.exit("set JEPELA_API_KEY (and JEPELA_BASE_URL if the gateway is not on 127.0.0.1:8797)")
+    return JepelaClient()
 
 
 def table(rows: list[list], headers: list[str]) -> None:

@@ -6,7 +6,7 @@ A limit is a number, and the engine reads words, not arithmetic. So each device'
 says so. Each device's memory keeps what a technician knows, in words.
 """
 from _common import MODEL, client, table
-from jers import Choice, Noul
+from jepela import Choice, Noul
 
 LIMIT_C = {"pump-12": 95, "pump-13": 75}          # bearing temperature limits, from the maintenance manual
 MEMORY = {"pump-12": "Pump-12 runs hot by design; a technician checked it on 2026-09-15.",

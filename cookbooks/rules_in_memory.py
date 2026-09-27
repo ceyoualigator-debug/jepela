@@ -9,7 +9,7 @@ gateway checks in code against the session result sent in `values`.
 from collections import Counter
 
 from _common import MODEL, client, table
-from jers import Choice, Noul
+from jepela import Choice, Noul
 
 BETS = {"no_bet": "sit this spin out", "red": "red, pays 1 to 1", "black": "black, pays 1 to 1", "even": "even, pays 1 to 1", "odd": "odd, pays 1 to 1",
         "low": "1 to 18, pays 1 to 1", "high": "19 to 36, pays 1 to 1", "dozen_1": "first dozen, pays 2 to 1", "straight_17": "the single number 17, pays 35 to 1"}

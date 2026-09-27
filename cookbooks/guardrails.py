@@ -5,7 +5,7 @@ Eight hand-written messages, not a benchmark. Prints what each was routed to (pa
 and the thresholds used; change them for your own error costs.
 """
 from _common import MODEL, Timer, client, table
-from jers import Noul, Score
+from jepela import Noul, Score
 
 MESSAGES = [
     "What's the weather like in Lisbon in October?",

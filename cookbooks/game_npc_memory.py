@@ -5,7 +5,7 @@ The merchant decides how to treat the player. With no memory every visit is the 
 player's deeds in memory the same scene gets a different answer. Compare is on, so both show.
 """
 from _common import MODEL, client, table
-from jers import Choice, Noul
+from jepela import Choice, Noul
 
 PLAYER = "player-7"
 DEEDS = ("The player stole three potions from the merchant's stall last week.\n"

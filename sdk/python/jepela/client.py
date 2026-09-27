@@ -12,6 +12,7 @@ import http.client
 import json
 import os
 import random
+import re
 import select
 import ssl
 import threading
@@ -19,13 +20,26 @@ import time
 import urllib.parse
 from typing import Any, Iterable
 
-from .errors import ConnectionFailed, JersError, error_for
+from .errors import ConnectionFailed, JepelaError, error_for
 from .types import MemoryInfo, Models, Response, questions_to_dict
 
-DEFAULT_BASE_URL = "https://api.getjers.com"
-ENV_API_KEY, ENV_BASE_URL = "JERS_API_KEY", "JERS_BASE_URL"
+DEFAULT_BASE_URL = "https://api.jepela.com"
+_REGION_KEY = re.compile(r"^jj_live_([a-z]{2})_[0-9a-f]{32}$")
+
+
+def region_of(api_key: str | None) -> str | None:
+    """The region a Jepela key belongs to (jj_live_eu_... is eu); None for keys made before regions (they are us)."""
+    m = _REGION_KEY.match(api_key or "")
+    return m.group(1) if m else None
+
+
+def base_url_for(api_key: str | None = None, region: str | None = None) -> str:
+    """The API address of a key's region, or of the region named; https://api.jepela.com when neither says one."""
+    region = region or region_of(api_key)
+    return f"https://{region}.api.jepela.com" if region else DEFAULT_BASE_URL
+ENV_API_KEY, ENV_BASE_URL = "JEPELA_API_KEY", "JEPELA_BASE_URL"
 RETRY_STATUSES = (429, 502, 503)
-USER_AGENT = "jers-sdk/0.2.0"
+USER_AGENT = "jepela-sdk/0.2.0"
 IDLE_SECONDS = 50.0              # the gateway closes a connection idle for 60 s; the client lets go first
 
 
@@ -35,7 +49,7 @@ class _Connections:
     def __init__(self, base_url: str, timeout: float):
         u = urllib.parse.urlsplit(base_url)
         if u.scheme not in ("http", "https") or not u.hostname:
-            raise JersError(f"base_url must be http:// or https://, got {base_url!r}")
+            raise JepelaError(f"base_url must be http:// or https://, got {base_url!r}")
         self.https, self.host, self.port = u.scheme == "https", u.hostname, u.port
         self.prefix, self.timeout = u.path.rstrip("/"), timeout
         self.local, self.lock, self.all = threading.local(), threading.Lock(), []
@@ -107,7 +121,7 @@ def _exchange(conns: _Connections, method: str, path: str, data: bytes | None, h
     return resp.status, resp, body
 
 
-def _error(status: int, resp, raw: bytes) -> JersError:
+def _error(status: int, resp, raw: bytes) -> JepelaError:
     try:
         err = json.loads(raw).get("error") or {}
     except (ValueError, AttributeError):
@@ -160,10 +174,14 @@ def _call(conns: _Connections, method: str, path: str, *, api_key: str | None, b
         raise error
 
 
-def signup(email: str, invite_code: str | None = None, base_url: str | None = None, timeout: float = 30.0) -> dict:
-    """Ask a gateway with self-serve sign-up for a new key. Needs no key. The key is shown once."""
-    base = (base_url or os.environ.get(ENV_BASE_URL) or DEFAULT_BASE_URL).rstrip("/")
+def signup(email: str, invite_code: str | None = None, base_url: str | None = None, timeout: float = 30.0,
+           region: str | None = None) -> dict:
+    """Ask for a new key with self-serve sign-up. Needs no key. The key is shown once, and belongs to `region`
+    (see GET /v1/regions); its memories and usage stay there."""
+    base = (base_url or os.environ.get(ENV_BASE_URL) or base_url_for(region=region)).rstrip("/")
     body = {"email": email}
+    if region:
+        body["region"] = region
     if invite_code:
         body["invite_code"] = invite_code
     conns = _Connections(base, timeout)
@@ -177,12 +195,13 @@ def _drop_none(d: dict) -> dict:
     return {k: v for k, v in d.items() if v is not None}
 
 
-class JersClient:
+class JepelaClient:
     """Synchronous client. Safe to share between threads.
 
     Args:
-        api_key: the key, or the JERS_API_KEY environment variable.
-        base_url: the gateway, or JERS_BASE_URL, or https://api.getjers.com.
+        api_key: the key, or the JEPELA_API_KEY environment variable.
+        base_url: the gateway, or JEPELA_BASE_URL, or the API of the key's region (jj_live_eu_... goes to
+            https://eu.api.jepela.com; keys made before regions to https://api.jepela.com).
         timeout: seconds per HTTP call.
         max_retries: retries on 429, 502 and 503 (a 429's Retry-After is honoured) and on connections that
             failed before the request was sent.
@@ -192,8 +211,8 @@ class JersClient:
                  backoff_seconds: float = 0.5):
         self.api_key = api_key or os.environ.get(ENV_API_KEY)
         if not self.api_key:
-            raise JersError(f"no API key: pass api_key or set {ENV_API_KEY}")
-        self.base_url = (base_url or os.environ.get(ENV_BASE_URL) or DEFAULT_BASE_URL).rstrip("/")
+            raise JepelaError(f"no API key: pass api_key or set {ENV_API_KEY}")
+        self.base_url = (base_url or os.environ.get(ENV_BASE_URL) or base_url_for(self.api_key)).rstrip("/")
         self.timeout, self.max_retries, self.backoff_seconds = timeout, max_retries, backoff_seconds
         self._conns = _Connections(self.base_url, timeout)
 
@@ -218,14 +237,18 @@ class JersClient:
     def system_one(self, state: Any, questions: Any, model: str | None = None, subject: str | None = None,
                    memory: dict | None = None, *, robust: bool | dict | None = None,
                    windows: bool | dict | None = None, derive: dict | None = None, values: dict | None = None,
-                   cache: bool | None = None, customer: str | None = None) -> Response:
+                   cache: bool | None = None, method: str | None = None, customer: str | None = None) -> Response:
         """One request, every question answered against the same state.
 
         questions: a dict of Choice / Score / Noul (or plain dicts), or a Pydantic model class whose fields
             become the questions; then `response.parsed` is an instance of that class.
         subject: whatever the decision is about (a customer, a user, a player, a device); its memory is used.
             `customer` is the older name.
-        memory: {"use", "top_k", "min_share", "compare", "placebo"}.
+        memory: {"use", "top_k", "min_share", "compare", "placebo", "names", "question_words", "focus", "explain"}.
+            names (default True): the subject's name and aliases are searched with the state; question_words (default
+            True): the questions' instructions are searched too; focus (default False): keep only lines that share a
+            word with the state beyond those names; explain (default False): per memory line (at most 8), how far the
+            answer moves when that line alone is left out.
         robust: True (3 orders), or {"orders": 1-5}: every choice of up to 20 options is asked with its options in
             several orders and averaged (a two-option choice has 2 orders); billed per order.
         windows: True, or {"combine": {"question_id": "max" | "mean" | "min"}}: a state longer than the engine reads
@@ -234,6 +257,9 @@ class JersClient:
             never by the model; the facts are shown to the model as computed by the system.
         values: numbers and strings the derive expressions and memory rules may use.
         cache: identical requests without memory return the stored answers without new engine work.
+        method: how choice questions are answered. "auto" (the gateway's default) matches choices of more than 20
+            options by vectors and asks the engine the rest; "engine" reads every option; "match" matches every choice.
+            Each answer's `method` says which answered it.
         """
         model_cls = None
         if isinstance(questions, type):
@@ -242,7 +268,8 @@ class JersClient:
         body: dict = {"state": state, "questions": questions_to_dict(questions)}
         subject = subject if subject is not None else customer
         body.update(_drop_none({"model": model or None, "subject": subject, "memory": dict(memory) if memory is not None else None,
-                                "robust": robust, "windows": windows, "derive": derive, "values": values, "cache": cache}))
+                                "robust": robust, "windows": windows, "derive": derive, "values": values, "cache": cache,
+                                "method": method}))
         response = Response.from_dict(self.request("POST", "/v1/systemone", body))
         if model_cls is not None:
             response.parsed = response.to_model(model_cls)
@@ -272,6 +299,24 @@ class JersClient:
         Example: rules_add("mia", "session_result <= -30", "Mia stops playing after losing 30.")"""
         return self.request("POST", "/v1/memory/rules", _drop_none({"subject": subject, "when": when, "text": text, "expires": expires,
                                                                      "ttl_seconds": ttl_seconds}))
+
+    def pin(self, subject: str, text: str, *, expires: str | None = None, ttl_seconds: float | None = None) -> dict:
+        """A line sent first at every decision about the subject, whatever the state says.
+        Example: pin("acme", "ACME pays for premium support.")"""
+        return self.request("POST", "/v1/memory/rules", _drop_none({"subject": subject, "text": text, "pin": True, "expires": expires,
+                                                                     "ttl_seconds": ttl_seconds}))
+
+    def exclude(self, subject: str, options: list[str], text: str, *, question: str | None = None, when: str | None = None,
+                expires: str | None = None, ttl_seconds: float | None = None) -> dict:
+        """Options removed from choice questions in code for this subject (while `when` holds); the text says why and is
+        never sent to the engine. Example: exclude("player-9", ["gold_coins"], "Coin bug.", question="reward")"""
+        return self.request("POST", "/v1/memory/rules", _drop_none({"subject": subject, "exclude": list(options), "text": text,
+                                                                     "question": question, "when": when, "expires": expires,
+                                                                     "ttl_seconds": ttl_seconds}))
+
+    def aliases(self, subject: str, names: list[str]) -> dict:
+        """Other names the subject goes by; recall searches them with the state. An empty list clears them."""
+        return self.request("POST", "/v1/memory/aliases", {"subject": subject, "aliases": list(names)})
 
     def rules(self, subject: str) -> list[dict]:
         return self.request("GET", "/v1/memory/rules?subject=" + urllib.parse.quote(subject)).get("rules", [])
@@ -351,6 +396,36 @@ class JersClient:
                 raise TimeoutError(f"batch {batch_id} still {job.get('status')} after {timeout} s")
             time.sleep(poll_seconds)
 
+    # -- fine-tuning
+    def finetune(self, base: str | None = None) -> dict:
+        """Train a model of your own on your golden cases (at least 20). base: "english" (the gateway's default),
+        "multilingual" or "typed-decisions". Returns the job: job, model, cases, held_out, state. One job runs at a
+        time; a second one, or an engine that is off, is a ConflictError."""
+        return self.request("POST", "/v1/finetune", _drop_none({"base": base}))
+
+    def finetunes(self) -> dict:
+        """Your fine-tuning jobs, newest first, with min_cases and the bases you can train from."""
+        return self.request("GET", "/v1/finetune")
+
+    def finetune_job(self, job: str) -> dict:
+        """One job: state (running, saving, done, failed with error), result, and usable (the model is in service)."""
+        return self.request("GET", "/v1/finetune/" + urllib.parse.quote(job))
+
+    def finetune_wait(self, job: str, timeout: float = 3600.0, poll_seconds: float = 10.0) -> dict:
+        """Poll until the job is done or failed; raises TimeoutError after `timeout` seconds."""
+        deadline = time.monotonic() + timeout
+        while True:
+            got = self.finetune_job(job)
+            if got.get("state") not in ("running", "saving"):
+                return got
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"fine-tuning job {job} still {got.get('state')} after {timeout} s")
+            time.sleep(poll_seconds)
+
+    def finetune_delete(self, model: str) -> dict:
+        """Delete a model you fine-tuned: its files are deleted and its name stops working."""
+        return self.request("POST", "/v1/finetune/delete", {"model": model})
+
     # -- account
     def models(self) -> Models:
         d = self.request("GET", "/v1/models")
@@ -360,12 +435,12 @@ class JersClient:
         return self.request("GET", "/v1/usage")
 
 
-class AsyncJersClient:
-    """Every JersClient method as a coroutine. Each call runs the synchronous client in a worker thread,
+class AsyncJepelaClient:
+    """Every JepelaClient method as a coroutine. Each call runs the synchronous client in a worker thread,
     so a program can have several decisions in flight without a second HTTP library."""
 
     def __init__(self, **kwargs):
-        self._sync = JersClient(**kwargs)
+        self._sync = JepelaClient(**kwargs)
 
     async def __aenter__(self):
         return self

@@ -5,7 +5,7 @@ The trail a data-protection officer wants: what was known, what the decision use
 and the proof that recall no longer finds it.
 """
 from _common import MODEL, client, table
-from jers import Noul
+from jepela import Noul
 
 SUBJECT = "fabrikam"
 FACTS = ("Fabrikam's contact Anna Berg asked on 2026-09-01 that no marketing mail be sent to her.\n"

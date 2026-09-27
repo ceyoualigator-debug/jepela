@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "jepela": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/jepela_mcp.py"],
+      "env": {
+        "JEPELA_API_KEY": "${JEPELA_API_KEY:-}",
+        "JEPELA_BASE_URL": "${JEPELA_BASE_URL:-}",
+        "JEPELA_MODEL": "${JEPELA_MODEL:-}"
+      }
+    }
+  }
+}

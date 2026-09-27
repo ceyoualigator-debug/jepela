@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jers-sdk"
+name = "jepela-sdk"
 version = "0.2.0"
-description = "Python client for Jers, the decision API with memory: typed questions in, typed answers with probabilities out (calibration fitted on your own labels), plus a per-subject memory."
+description = "Python client for Jepela, the decision API with memory: typed questions in, typed answers with probabilities out (calibration fitted on your own labels), plus a per-subject memory."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Proprietary"}
@@ -13,4 +13,4 @@ dependencies = []
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["jers*"]
+include = ["jepela*"]

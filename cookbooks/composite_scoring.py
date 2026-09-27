@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Composite scoring: one Score per dimension, normalised and weighted in code, two rankings from the same answers."""
 from _common import MODEL, client, table
-from jers import Score
+from jepela import Score
 
 PROFILES = {
     "Ada": "Eight years of Python, built the data pipeline that the whole company uses; led a team of five for two years; designed a multi-region ingestion system; picked up Rust last year for a side project.",

@@ -1,11 +1,11 @@
 ---
-name: jers-decisions
-description: Use the Jers MCP tools (decide, remember, forget, delete, memory, feedback, quality) to make typed decisions about a situation - route, classify, score, check yes/no - with a per-subject memory, instead of guessing an answer in prose.
+name: jepela-decisions
+description: Use the Jepela MCP tools (decide, remember, forget, delete, memory, feedback, quality) to make typed decisions about a situation - route, classify, score, check yes/no - with a per-subject memory, instead of guessing an answer in prose.
 ---
 
-# Deciding with Jers
+# Deciding with Jepela
 
-Jers answers typed questions about a situation and returns a probability for every option. It does not
+Jepela answers typed questions about a situation and returns a probability for every option. It does not
 write text. Use it when a task needs a decision that should be consistent, measurable and, when a
 subject is involved, informed by what is known about that subject.
 
@@ -22,7 +22,8 @@ subject is involved, informed by what is known about that subject.
 ## Questions that work
 
 - `choice`: unordered categories, `criteria` maps option names to short descriptions. Add an `other`
-  option. Up to 20 options are read in one round; larger sets are answered in two rounds.
+  option. Up to 20 options are read by the engine; larger sets are matched by vectors, so give every option a
+  short description of what it means.
 - `score`: 2 to 10 ordered levels, lowest first, each described as a situation, not as "low" or "high".
 - `noul`: one yes/no statement phrased for yes. One thing per question; combine answers in code.
 - Keep the state short: the engine reads up to about 475 tokens of it on the English model (measured with
@@ -35,7 +36,8 @@ subject is involved, informed by what is known about that subject.
   "In the Coin Hall, the hero goes down the plain stair".
 - Do not write what to avoid. A line such as "Never walk along the gold coins" pulled a decision toward
   the coins (83% to 94%, measured). `remember` returns a warning when a line does this.
-- When an option must never be chosen, leave it out of the question. Memory makes allowed answers more or
+- When an option must never be chosen, leave it out of the question (an application can also store an
+  exclusion rule through the API, which removes it in code). A memory line makes allowed answers more or
   less likely; it cannot forbid one (on ten roulette states where 17 had just come up, a line saying which
   bets to make left 17 the bet in 10 of 10, against 9 of 10 with no memory; measured 2026-09-23).
 - Numbers compared in words ("above 75 C") are read as words. Put the number in `values` and use `derive`,

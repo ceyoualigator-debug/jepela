@@ -6,7 +6,7 @@ they are asked anyway because one request costs the same engine pass. Prints one
 the measured time and cost.
 """
 from _common import MODEL, Timer, client, table
-from jers import Choice, Noul, Score
+from jepela import Choice, Noul, Score
 
 TICKETS = [
     "The export button does nothing since yesterday's update. Console shows a 500. Steps: open a report, click Export, nothing happens.",

@@ -5,7 +5,7 @@ Writes the priority account's facts once, then decides the same message for both
 so the answer shows what the memory changed. The control account must not move.
 """
 from _common import MODEL, client, table
-from jers import Choice, Noul
+from jepela import Choice, Noul
 
 FACTS = ("Northwind Traders holds a priority support contract: every complaint from Northwind is escalated to a named person within the hour.\n"
          "Northwind Traders threatened to leave in August after a slow reply.")

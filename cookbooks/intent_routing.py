@@ -5,7 +5,7 @@ Simple lookups go to code, domain questions to a specialist with the right conte
 cases to a person. The expensive resource is called only when the cheap decision says so.
 """
 from _common import MODEL, client, table
-from jers import Choice, Score
+from jepela import Choice, Score
 
 MESSAGES = [
     "Where is my order 88213?",

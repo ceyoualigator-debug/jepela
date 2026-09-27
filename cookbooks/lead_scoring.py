@@ -6,7 +6,7 @@ acts on it. The money signal is two nouls, an approved budget and a vendor alrea
 one condition per noul.
 """
 from _common import MODEL, client, table
-from jers import Choice, Noul, Score
+from jepela import Choice, Noul, Score
 
 LEADS = [
     "Hi, we're a 400-person logistics company evaluating decision APIs for our support desk. Budget approved for Q4, need SSO and an on-prem option. Can we talk this week?",

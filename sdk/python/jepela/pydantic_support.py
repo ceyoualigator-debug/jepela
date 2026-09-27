@@ -2,7 +2,7 @@
 
     from typing import Annotated, Literal
     from pydantic import BaseModel, Field
-    from jers import JersClient, Levels, Options
+    from jepela import JepelaClient, Levels, Options
 
     class Ticket(BaseModel):
         team: Annotated[Literal["billing", "support", "other"],
@@ -12,7 +12,7 @@
         urgency: Annotated[int, Levels("Can wait a week", "Should be handled today", "Blocking the customer now")] = Field(
             description="How urgent is this?")
 
-    r = JersClient().system_one("We were charged twice and need the money back today.", Ticket)
+    r = JepelaClient().system_one("We were charged twice and need the money back today.", Ticket)
     r.parsed.team, r.parsed.refund, r.parsed.urgency        # 'billing', True, 2
 
 A Literal or an Enum field becomes a choice, a bool field a noul, and an int or float field marked with
@@ -130,7 +130,7 @@ def _plan(model_cls) -> dict:
 
 
 def questions_from_model(model_cls) -> dict:
-    """The model's fields as Jers questions, keyed by field name."""
+    """The model's fields as Jepela questions, keyed by field name."""
     return {name: q for name, (_, _, q) in _plan(model_cls).items()}
 
 

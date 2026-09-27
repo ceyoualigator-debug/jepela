@@ -4,17 +4,28 @@
 // before the request was sent. A request that was sent and then failed is sent again only if it is a
 // GET, so a decision is never billed twice.
 
-import { ConnectionFailed, JersError, errorFor } from "./errors.ts";
-import type { DecideOptions, MemoryInfo, Questions, Response } from "./types.ts";
+import { ConnectionFailed, JepelaError, errorFor } from "./errors.ts";
+import type { DecideOptions, FinetuneJob, MemoryInfo, Questions, Response } from "./types.ts";
 
-export const DEFAULT_BASE_URL = "https://api.getjers.com";
+export const DEFAULT_BASE_URL = "https://api.jepela.com";
+
+/** The region a Jepela key belongs to (jj_live_eu_... is "eu"); undefined for keys made before regions (they are us). */
+export function regionOf(apiKey?: string): string | undefined {
+  return /^jj_live_([a-z]{2})_[0-9a-f]{32}$/.exec(apiKey ?? "")?.[1];
+}
+
+/** The API address of a key's region, or of the region named; https://api.jepela.com when neither says one. */
+export function baseUrlFor(apiKey?: string, region?: string): string {
+  const r = region ?? regionOf(apiKey);
+  return r ? `https://${r}.api.jepela.com` : DEFAULT_BASE_URL;
+}
 const RETRY_STATUSES = new Set([429, 502, 503]);
 const NOT_SENT = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "UND_ERR_CONNECT_TIMEOUT", "EHOSTUNREACH", "ENETUNREACH"]);
-const USER_AGENT = "jers-sdk-ts/0.1.0";
+const USER_AGENT = "jepela-sdk-ts/0.1.0";
 
 export interface ClientOptions {
-  apiKey?: string;       // or JERS_API_KEY
-  baseUrl?: string;      // or JERS_BASE_URL, or https://api.getjers.com
+  apiKey?: string;       // or JEPELA_API_KEY
+  baseUrl?: string;      // or JEPELA_BASE_URL, or the API of the key's region (jj_live_eu_... goes to https://eu.api.jepela.com)
   timeoutMs?: number;    // per HTTP call, default 120 000
   maxRetries?: number;   // default 2
   backoffMs?: number;    // default 500
@@ -82,9 +93,10 @@ async function call(baseUrl: string, apiKey: string | undefined, sent: Sent, tim
 }
 
 /** Ask a gateway with self-serve sign-up for a new key. Needs no key; the key is shown once. */
-export async function signup(email: string, opts: { inviteCode?: string; baseUrl?: string; timeoutMs?: number } = {}) {
-  const baseUrl = (opts.baseUrl ?? env("JERS_BASE_URL") ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+export async function signup(email: string, opts: { inviteCode?: string; baseUrl?: string; timeoutMs?: number; region?: string } = {}) {
+  const baseUrl = (opts.baseUrl ?? env("JEPELA_BASE_URL") ?? baseUrlFor(undefined, opts.region)).replace(/\/+$/, "");
   const body: Record<string, string> = { email };
+  if (opts.region) body.region = opts.region;
   if (opts.inviteCode) body.invite_code = opts.inviteCode;
   return call(baseUrl, undefined, { method: "POST", path: "/v1/signup", body }, opts.timeoutMs ?? 30_000, 0, 0) as
     Promise<{ tenant: string; key: string; key_id: string; credit: number; currency: string }>;
@@ -93,7 +105,7 @@ export async function signup(email: string, opts: { inviteCode?: string; baseUrl
 const clean = <T extends Record<string, unknown>>(o: T): Partial<T> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
 
-export class JersClient {
+export class JepelaClient {
   readonly baseUrl: string;
   private readonly apiKey: string;
   private readonly timeoutMs: number;
@@ -101,10 +113,10 @@ export class JersClient {
   private readonly backoffMs: number;
 
   constructor(opts: ClientOptions = {}) {
-    const key = opts.apiKey ?? env("JERS_API_KEY");
-    if (!key) throw new JersError("no API key: pass apiKey or set JERS_API_KEY");
+    const key = opts.apiKey ?? env("JEPELA_API_KEY");
+    if (!key) throw new JepelaError("no API key: pass apiKey or set JEPELA_API_KEY");
     this.apiKey = key;
-    this.baseUrl = (opts.baseUrl ?? env("JERS_BASE_URL") ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    this.baseUrl = (opts.baseUrl ?? env("JEPELA_BASE_URL") ?? baseUrlFor(key)).replace(/\/+$/, "");
     this.timeoutMs = opts.timeoutMs ?? 120_000;
     this.maxRetries = opts.maxRetries ?? 2;
     this.backoffMs = opts.backoffMs ?? 500;
@@ -138,6 +150,19 @@ export class JersClient {
   }
   rulesAdd(subject: string, when: string, text: string, opts: { expires?: string; ttlSeconds?: number } = {}) {
     return this.request("POST", "/v1/memory/rules", clean({ subject, when, text, expires: opts.expires, ttl_seconds: opts.ttlSeconds }));
+  }
+  /** A line sent first at every decision about the subject, whatever the state says. */
+  pin(subject: string, text: string, opts: { expires?: string; ttlSeconds?: number } = {}) {
+    return this.request("POST", "/v1/memory/rules", clean({ subject, text, pin: true, expires: opts.expires, ttl_seconds: opts.ttlSeconds }));
+  }
+  /** Options removed from choice questions in code for this subject; the text says why and is never sent to the engine. */
+  exclude(subject: string, options: string[], text: string, opts: { question?: string; when?: string; expires?: string; ttlSeconds?: number } = {}) {
+    return this.request("POST", "/v1/memory/rules", clean({ subject, exclude: options, text, question: opts.question, when: opts.when,
+                                                            expires: opts.expires, ttl_seconds: opts.ttlSeconds }));
+  }
+  /** Other names the subject goes by; recall searches them with the state. An empty list clears them. */
+  aliases(subject: string, names: string[]) {
+    return this.request("POST", "/v1/memory/aliases", { subject, aliases: names });
   }
   async rules(subject: string): Promise<{ id: string; when: string; text: string; expires_at?: string | null; created?: string }[]> {
     return (await this.request("GET", `/v1/memory/rules?subject=${q(subject)}`)).rules ?? [];
@@ -199,9 +224,35 @@ export class JersClient {
     for (;;) {
       const job = await this.batch(id);
       if (job.status !== "queued" && job.status !== "running") return job;
-      if (Date.now() >= deadline) throw new JersError(`batch ${id} still ${job.status} after ${timeoutMs} ms`);
+      if (Date.now() >= deadline) throw new JepelaError(`batch ${id} still ${job.status} after ${timeoutMs} ms`);
       await sleep(pollMs);
     }
+  }
+
+  // -- fine-tuning
+  /** Train a model of your own on your golden cases (at least 20); base "english" (default), "multilingual" or "typed-decisions". */
+  finetune(base?: "english" | "multilingual" | "typed-decisions") {
+    return this.request<FinetuneJob>("POST", "/v1/finetune", clean({ base }));
+  }
+  /** Your jobs, newest first, with the fewest cases a job needs and the bases you can train from. */
+  finetunes() {
+    return this.request<{ jobs: FinetuneJob[]; min_cases: number; bases: string[] }>("GET", "/v1/finetune");
+  }
+  finetuneJob(id: string) {
+    return this.request<FinetuneJob>("GET", `/v1/finetune/${q(id)}`);
+  }
+  async finetuneWait(id: string, timeoutMs = 3_600_000, pollMs = 10_000): Promise<FinetuneJob> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const job = await this.finetuneJob(id);
+      if (job.state !== "running" && job.state !== "saving") return job;
+      if (Date.now() >= deadline) throw new JepelaError(`fine-tuning job ${id} still ${job.state} after ${timeoutMs} ms`);
+      await sleep(pollMs);
+    }
+  }
+  /** Delete a model you fine-tuned: its files go and its name stops working. */
+  finetuneDelete(model: string) {
+    return this.request<{ deleted: string }>("POST", "/v1/finetune/delete", { model });
   }
 
   // -- account

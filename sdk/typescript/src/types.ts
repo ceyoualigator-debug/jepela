@@ -54,6 +54,8 @@ export interface ChoiceAnswer<K extends string = string> {
   calibration?: Calibration;    // the tenant temperature applied, if any
   raw_probabilities?: Record<K, number>;
   window?: number;
+  method?: "engine" | "match";  // read by the engine, or matched by vectors
+  similarity?: { best: number; second: number | null };   // matched answers: the best and second-best cosine
 }
 
 export interface ScoreAnswer {
@@ -66,6 +68,7 @@ export interface ScoreAnswer {
   raw_probabilities?: Record<string, number>;
   raw_score?: number;
   window?: number;
+  method?: "engine";
 }
 
 export interface NoulAnswer {
@@ -75,6 +78,7 @@ export interface NoulAnswer {
   calibration?: Calibration;
   raw_noul?: number;
   window?: number;
+  method?: "engine";
 }
 
 export type AnswerFor<Q> = Q extends ChoiceQuestion<infer K> ? ChoiceAnswer<K> : Q extends ScoreQuestion ? ScoreAnswer : NoulAnswer;
@@ -98,9 +102,10 @@ export interface Usage {
   state_tokens?: number;         // the state, in the engine's tokens
   state_tokens_read?: number;    // how much of it the engine read
   state_truncated?: boolean;
+  match_questions?: number;      // choice questions answered by matching, when some were
 }
 
-export interface JersWarning {
+export interface JepelaWarning {
   code: string;
   message: string;
   question?: string;
@@ -118,6 +123,10 @@ export interface MemoryResult<Q extends Questions = Questions> {
   without_memory?: Answers<Q>;
   changes?: Record<string, unknown>;
   placebo?: { content_effect: Record<string, number>; memory_effect: Record<string, number>; presence_only: string[]; [k: string]: unknown };
+  pinned?: string[];                                    // ids of the pinned rules sent
+  excluded?: Record<string, Record<string, string>>;    // per question: { option: why } removed by exclusion rules
+  exclusions_skipped?: { question: string; options: string[]; reason: string }[];
+  explain?: { line: string; kind: "pinned" | "rule" | "recalled"; effect: Record<string, number> }[];
 }
 
 export interface Response<Q extends Questions = Questions> {
@@ -125,7 +134,7 @@ export interface Response<Q extends Questions = Questions> {
   model: string;
   answers: Answers<Q>;
   usage: Usage;
-  warnings: JersWarning[];
+  warnings: JepelaWarning[];
   engine: Record<string, unknown>;
   memory?: MemoryResult<Q>;
   reading?: Record<string, { state_tokens: number; read: number; room: number; chars_read: number; truncated: boolean }>;
@@ -139,6 +148,10 @@ export interface MemoryOptions {
   min_share?: number;   // keep lines scoring at least this share of the best one, 0.05 to 1 (default 0.2)
   compare?: boolean;    // also answer without memory
   placebo?: boolean;    // also answer with neutral lines, to show the memory worked by its content
+  names?: boolean;      // search the subject's name and aliases with the state (default true)
+  question_words?: boolean;   // search the questions' instructions too (default true)
+  focus?: boolean;      // keep only lines that share a word with the state beyond those names (default false)
+  explain?: boolean;    // per memory line (at most 8), how far the answer moves when it alone is left out (default false)
 }
 
 export interface DecideOptions {
@@ -150,6 +163,22 @@ export interface DecideOptions {
   derive?: Record<string, string | { when: string; fact: string; else?: string }>;
   values?: Record<string, unknown>;
   cache?: boolean;
+  method?: "auto" | "engine" | "match";   // auto (default): match choices of more than 20 options, ask the engine the rest
+}
+
+export interface FinetuneJob {
+  job: string;
+  model: string;                 // the name to use in requests once usable
+  state: "running" | "saving" | "done" | "failed";
+  base?: string;
+  cases?: number;
+  held_out?: number;
+  cases_with_memory?: number;
+  result?: Record<string, unknown> | null;   // won, base_accuracy, tuned_accuracy, held_out_questions, log losses, training_seconds
+  usable: boolean;               // true when the model is in service
+  error?: string | null;
+  warnings: string[];
+  [k: string]: unknown;
 }
 
 export interface MemoryInfo {

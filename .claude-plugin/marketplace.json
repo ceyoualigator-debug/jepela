@@ -1,12 +1,12 @@
 {
-  "name": "jers",
-  "owner": {"name": "Jers", "email": "ceyoualigator@gmail.com"},
-  "description": "Plugins for Jers, the decision API with memory.",
+  "name": "jepela",
+  "owner": {"name": "Jepela", "email": "ceyoualigator@gmail.com"},
+  "description": "Plugins for Jepela, the decision API with memory.",
   "plugins": [
     {
-      "name": "jers",
-      "source": "./plugins/jers",
-      "description": "Jers decisions with memory as MCP tools: decide, remember, forget, delete, memory, feedback, quality.",
+      "name": "jepela",
+      "source": "./plugins/jepela",
+      "description": "Jepela decisions with memory as MCP tools: decide, remember, forget, delete, memory, feedback, quality.",
       "version": "0.1.0",
       "category": "development"
     }

@@ -1,19 +1,19 @@
-Jers commercial licence
+Jepela commercial licence
 
-Copyright (c) 2026 Jers. All rights reserved.
+Copyright (c) 2026 Jepela. All rights reserved.
 
-This repository holds client software for the Jers API: the SDKs, the MCP server and plugin, the agent
+This repository holds client software for the Jepela API: the SDKs, the MCP server and plugin, the agent
 skill and the cookbooks (the "Software").
 
-You may install and run the Software, unmodified or modified for your own use, only to access the Jers API
-under an account with Jers.
+You may install and run the Software, unmodified or modified for your own use, only to access the Jepela API
+under an account with Jepela.
 
-You may not, without written permission from Jers:
+You may not, without written permission from Jepela:
   - copy, publish, distribute, sell, sublicense or rent the Software, in whole or in part;
-  - use the Software, or anything derived from it, to build or run a service that competes with Jers;
+  - use the Software, or anything derived from it, to build or run a service that competes with Jepela;
   - remove this notice.
 
-The Software is provided "as is", without warranty of any kind. Jers is not liable for any damages arising
+The Software is provided "as is", without warranty of any kind. Jepela is not liable for any damages arising
 from its use.
 
 Licensing questions: ceyoualigator@gmail.com

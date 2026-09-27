@@ -61,6 +61,8 @@ class ChoiceAnswer:
     calibration: dict | None = None           # the tenant temperature applied, if any
     raw_probabilities: dict | None = None     # before that temperature
     window: int | None = None                 # the window that decided, when read in windows
+    method: str | None = None                 # "engine" (read by the engine) or "match" (matched by vectors)
+    similarity: dict | None = None            # matched answers: {"best", "second"} cosine similarities
 
 
 @dataclass
@@ -74,6 +76,7 @@ class ScoreAnswer:
     raw_probabilities: dict | None = None
     raw_score: float | None = None
     window: int | None = None
+    method: str | None = None                 # "engine"
 
     @property
     def level(self) -> int:
@@ -89,6 +92,7 @@ class NoulAnswer:
     calibration: dict | None = None
     raw_noul: float | None = None
     window: int | None = None
+    method: str | None = None                 # "engine"
 
     @property
     def yes(self) -> bool:
@@ -103,14 +107,15 @@ def answer_from(d: dict) -> Answer:
     if kind == "choice":
         return ChoiceAnswer(d.get("choice"), dict(d.get("probabilities") or {}), d.get("confidence"), rounds=d.get("rounds"),
                             orders=d.get("orders"), agreement=d.get("agreement"), calibration=d.get("calibration"),
-                            raw_probabilities=d.get("raw_probabilities"), window=d.get("window"))
+                            raw_probabilities=d.get("raw_probabilities"), window=d.get("window"), method=d.get("method"),
+                            similarity=d.get("similarity"))
     if kind == "score":
         return ScoreAnswer(float(d.get("score", 0.0)), dict(d.get("probabilities") or {}), dict(d.get("legend") or {}), d.get("confidence"),
                            calibration=d.get("calibration"), raw_probabilities=d.get("raw_probabilities"), raw_score=d.get("raw_score"),
-                           window=d.get("window"))
+                           window=d.get("window"), method=d.get("method"))
     if kind == "noul":
         return NoulAnswer(float(d.get("noul", 0.0)), d.get("confidence"), calibration=d.get("calibration"), raw_noul=d.get("raw_noul"),
-                          window=d.get("window"))
+                          window=d.get("window"), method=d.get("method"))
     raise ValueError(f"unknown answer type {kind!r}")
 
 
@@ -134,6 +139,7 @@ class Usage:
     state_truncated: bool = False
     cached: bool = False
     raw: dict = field(default_factory=dict)
+    match_questions: int | None = None         # choice questions answered by matching, when some were
 
     @classmethod
     def from_dict(cls, d: dict | None) -> "Usage":
@@ -142,11 +148,11 @@ class Usage:
                    float(d.get("engine_ms", 0.0)), float(d.get("gateway_ms", 0.0)), float(d.get("cost", 0.0)), str(d.get("currency", "")),
                    d.get("balance"), d.get("input_tokens"), int(d.get("answers_billed", d.get("answers", 0))), int(d.get("engine_answers", 0)),
                    int(d.get("memory_lines_seen", 0)), d.get("state_tokens"), d.get("state_tokens_read"), bool(d.get("state_truncated", False)),
-                   bool(d.get("cached", False)), dict(d))
+                   bool(d.get("cached", False)), dict(d), match_questions=d.get("match_questions"))
 
 
 @dataclass
-class JersWarning:
+class JepelaWarning:
     """Advice about a known trap; the answer is returned either way."""
     code: str
     message: str
@@ -167,6 +173,10 @@ class MemoryResult:
     rules_fired: list[dict] = field(default_factory=list)
     rules_broken: list[dict] = field(default_factory=list)
     placebo: dict | None = None               # content_effect, memory_effect, presence_only
+    pinned: list[str] = field(default_factory=list)            # ids of the pinned rules sent
+    excluded: dict[str, dict[str, str]] = field(default_factory=dict)   # per question: {option: why} removed by exclusion rules
+    exclusions_skipped: list[dict] = field(default_factory=list)        # exclusions that would have removed every option
+    explain: list[dict] | None = None         # with memory={"explain": True}: [{"line", "kind", "effect"}]
 
     @classmethod
     def from_dict(cls, d: dict) -> "MemoryResult":
@@ -174,7 +184,8 @@ class MemoryResult:
         return cls(d.get("subject", d.get("customer")), int(d.get("lines_used", 0)), list(d.get("hits") or []), d.get("recall_ms"),
                    {k: answer_from(v) for k, v in without.items()} if isinstance(without, dict) else None, d.get("changes"),
                    int(d.get("lines_seen", d.get("lines_used", 0))), int(d.get("lines_dropped", 0)), list(d.get("rules_fired") or []),
-                   list(d.get("rules_broken") or []), d.get("placebo"))
+                   list(d.get("rules_broken") or []), d.get("placebo"), list(d.get("pinned") or []), dict(d.get("excluded") or {}),
+                   list(d.get("exclusions_skipped") or []), d.get("explain"))
 
 
 @dataclass
@@ -185,7 +196,7 @@ class Response:
     engine: dict = field(default_factory=dict)
     memory: MemoryResult | None = None
     decision_id: str | None = None
-    warnings: list[JersWarning] = field(default_factory=list)
+    warnings: list[JepelaWarning] = field(default_factory=list)
     reading: dict = field(default_factory=dict)
     derived: dict = field(default_factory=dict)
     windows: dict | None = None
@@ -196,7 +207,7 @@ class Response:
     def from_dict(cls, d: dict) -> "Response":
         return cls(d.get("model"), {k: answer_from(v) for k, v in (d.get("answers") or {}).items()}, Usage.from_dict(d.get("usage")),
                    dict(d.get("engine") or {}), MemoryResult.from_dict(d["memory"]) if isinstance(d.get("memory"), dict) else None,
-                   d.get("decision_id"), [JersWarning(w.get("code"), w.get("message"), w.get("question")) for w in d.get("warnings") or []],
+                   d.get("decision_id"), [JepelaWarning(w.get("code"), w.get("message"), w.get("question")) for w in d.get("warnings") or []],
                    dict(d.get("reading") or {}), dict(d.get("derived") or {}), d.get("windows"), d)
 
     def to_model(self, model_cls, threshold: float = 0.5):

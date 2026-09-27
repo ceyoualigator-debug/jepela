@@ -1,0 +1,9 @@
+{
+  "name": "jepela",
+  "version": "0.1.0",
+  "description": "Jepela, the decision API with memory, as tools for Claude: typed choice, score and yes/no decisions with a probability for every option and calibration fitted on your own labels, a per-subject memory you can teach, read and forget, feedback and a quality report.",
+  "author": {"name": "Jepela", "email": "ceyoualigator@gmail.com", "url": "https://jepela.com"},
+  "repository": "https://github.com/ceyoualigator-debug/jepela",
+  "license": "Proprietary",
+  "keywords": ["decisions", "classification", "memory", "mcp", "jepela"]
+}
