@@ -27,7 +27,7 @@ Each script deletes and rewrites the memory of its own subjects under your key's
 
 `JEPELA_MODEL` picks the model (default `jepela-english`). For the Jepela team: the published results in
 `docs/jepela/cookbooks.md` and `docs/jepela/examples.md` are regenerated against a gateway and product started from this
-repository, in front of the engine at `LAYA_URL`, which must already be running; keys and memory go to a temporary
+repository, in front of the engine at `JEPELA_ENGINE_URL`, which must already be running; keys and memory go to a temporary
 directory:
 
 ```bash
