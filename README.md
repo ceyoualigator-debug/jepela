@@ -18,7 +18,7 @@ Documentation: https://jepela.com/docs/index.html · Live demos: https://demo.je
 
 ## A key
 
-Write to [ceyoualigator@gmail.com](mailto:ceyoualigator@gmail.com?subject=Jepela%20API%20key) with a sentence about
+Write to [info@jepela.com](mailto:info@jepela.com?subject=Jepela%20API%20key) with a sentence about
 what you want to decide; you get a key and your starting credit.
 
 ## One request

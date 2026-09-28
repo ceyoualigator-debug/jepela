@@ -1,6 +1,6 @@
 {
   "name": "jepela",
-  "owner": {"name": "Jepela", "email": "ceyoualigator@gmail.com"},
+  "owner": {"name": "Jepela", "email": "info@jepela.com"},
   "description": "Plugins for Jepela, the decision API with memory.",
   "plugins": [
     {
